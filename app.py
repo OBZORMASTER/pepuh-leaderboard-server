@@ -6,14 +6,14 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Инициализация базы при запуске сервера
+# запуск сервера
 with app.app_context():
     db.init_db()
-    print("🚀 Сервер запущен и готов к работе!")
+    print("Сервер готовий")
 
 @app.route("/")
 def home():
-    print("📞 Получен запрос на главную страницу")
+    print("Отримано запит на головну сторінку")
     return jsonify({
         "message": "Pepuh Leaderboard Server", 
         "status": "running",
@@ -22,13 +22,13 @@ def home():
 
 @app.route("/api/health")
 def health():
-    print("📞 Получен запрос health check")
+    print("Отримано запит health check")
     return jsonify({"status": "healthy", "database": "SQLite"})
 
 @app.route("/api/register", methods=["POST"])
 def register():
     try:
-        print("📞 Получен запрос на регистрацию")
+        print("Отримано запит на реєстрацію")
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
@@ -38,17 +38,17 @@ def register():
             return jsonify({"error": "Name is required"}), 400
         
         db.add_player(name)
-        print(f"✅ Игрок {name} зарегистрирован")
+        print(f"✅ Гравець {name} зареєстрований")
         return jsonify({"message": f"Player '{name}' registered successfully!"})
         
     except Exception as e:
-        print(f"❌ Ошибка при регистрации: {e}")
+        print(f"Помилка під час реєстрації: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/update_score", methods=["POST"])
 def update_score():
     try:
-        print("📞 Получен запрос на обновление счета")
+        print("📞 Отримано запит на оновлення рахунку")
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
@@ -62,14 +62,14 @@ def update_score():
         success = db.update_score(name, score)
         
         if success:
-            print(f"✅ Счет обновлен для {name}: {score}")
+            print(f"Рахунок оновлено для {name}: {score}")
             return jsonify({
                 "message": f"Score updated for {name}",
                 "score": score,
                 "status": "success"
             })
         else:
-            print(f"⚠️ Счет не обновлен для {name} (текущий счет выше)")
+            print(f"Рахунок не оновлено для {name} (текущий счет выше)")
             return jsonify({
                 "message": f"Score not updated for {name} (current score is higher)",
                 "score": score,
@@ -77,20 +77,20 @@ def update_score():
             })
             
     except Exception as e:
-        print(f"❌ Ошибка при обновлении счета: {e}")
+        print(f"Помилка під час оновлення рахунку: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/leaderboard", methods=["GET"])
 def leaderboard():
     try:
-        print("📞 Получен запрос лидерборда")
+        print("Отриманий запит лідерборда")
         limit = request.args.get('limit', 10, type=int)
         leaders = db.get_leaderboard(limit)
         
         # Форматируем для Godot
         formatted_leaders = [[player[0], player[1]] for player in leaders]
         
-        print(f"✅ Лидерборд отправлен: {len(leaders)} игроков")
+        print(f"Лідерборд відправлено: {len(leaders)} гравців")
         return jsonify({
             "leaders": formatted_leaders,
             "count": len(leaders),
@@ -98,17 +98,17 @@ def leaderboard():
         })
         
     except Exception as e:
-        print(f"❌ Ошибка при получении лидерборда: {e}")
+        print(f"Помилка при отриманні лідерборду: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/player/<name>", methods=["GET"])
 def get_player(name):
     try:
-        print(f"📞 Получен запрос информации об игроке: {name}")
+        print(f"Отриманий запит інформації про гравця: {name}")
         player = db.get_player_stats(name)
         
         if player:
-            print(f"✅ Информация об игроке {name} отправлена")
+            print(f"Інформація про гравця {name} відправлена")
             return jsonify({
                 "name": player[0],
                 "best_score": player[1],
@@ -117,16 +117,16 @@ def get_player(name):
                 "status": "found"
             })
         else:
-            print(f"⚠️ Игрок {name} не найден")
+            print(f"⚠️ Гравця {name} не знайдено")
             return jsonify({"error": "Player not found"}), 404
             
     except Exception as e:
-        print(f"❌ Ошибка при получении информации об игроке: {e}")
+        print(f"Помилка при отриманні інформації про гравця: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/test")
 def test():
-    print("✅ Тестовый запрос получен!")
+    print("Тестовий запит отримано!")
     return jsonify({
         "status": "success", 
         "message": "Server is working!",
@@ -134,16 +134,16 @@ def test():
     })
 
 if __name__ == "__main__":
-    # Получаем порт из переменной окружения (для Render)
+    # Отримуємо порт із змінної оточення (для Render)
     port = int(os.environ.get("PORT", 5000))
     
-    # Инициализируем базу
+    # Ініціалізуємо базу
     db.init_db()
     
     print(f"🚀 Запуск сервера на порту {port}")
     app.run(
         host="0.0.0.0", 
         port=port, 
-        debug=False,  # На продакшене debug=False
+        debug=False,  # На продакшені debug = False
         threaded=True
     )
