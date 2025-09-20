@@ -1,136 +1,160 @@
-import sqlite3
 import os
+from supabase import create_client
+from flask import Flask
+import logging
 
-DB_NAME = "players.db"
+# Налаштування логування
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def get_connection():
-    return sqlite3.connect(DB_NAME)
+# Ініціалізація Flask додатку
+app = Flask(__name__)
+
+# Підключення до Supabase
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_KEY")
+
+# Додатковий вивід для відладки (можна прибрати після налаштування)
+logger.info(f"SUPABASE_URL: {supabase_url}")
+logger.info(f"SUPABASE_KEY присутній: {bool(supabase_key)}")
+
+# Перевіряємо наявність змінних оточення
+if not supabase_url or not supabase_key:
+    logger.error("ПОМИЛКА: Не знайдено змінні оточення Supabase!")
+    logger.error("Будь ласка, додайте SUPABASE_URL та SUPABASE_KEY в Render Environment Variables")
+    supabase_client = None
+else:
+    try:
+        supabase_client = create_client(supabase_url, supabase_key)
+        logger.info("Успішне підключення до Supabase!")
+    except Exception as e:
+        logger.error(f"Помилка підключення до Supabase: {e}")
+        supabase_client = None
 
 def init_db():
-    """Ініціалізує базу даних"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS players (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT UNIQUE NOT NULL,
-            best_score INTEGER DEFAULT 0,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        
-        # Перевіряємо існування стовпця updated_at і додаємо якщо потрібно
-        cursor.execute("PRAGMA table_info(players)")
-        columns = [column[1] for column in cursor.fetchall()]
-        
-        if 'updated_at' not in columns:
-            cursor.execute("ALTER TABLE players ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP")
-            print("Доданий стовпець updated_at")
-        
-        conn.commit()
-        print("База даних ініціалізована")
-        
-    except Exception as e:
-        print(f"Помилка ініціалізації БД: {e}")
-    finally:
-        conn.close()
+    """Функція ініціалізації бази даних (залишена для сумісності)"""
+    logger.info("База даних Supabase готова до роботи!")
+    return True
 
 def add_player(name):
-    """Додає нового гравця"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO players (name) VALUES (?)", (name,))
-        conn.commit()
-        print(f"Гравця {name} додано")
+    """Додає нового гравця до бази даних"""
+    if supabase_client is None:
+        logger.error("Supabase не підключено")
+        return False
         
-    except sqlite3.IntegrityError:
-        print(f"Гравець {name} вже існує")
+    try:
+        result = supabase_client.table("players").insert({
+            "name": name,
+            "best_score": 0
+        }).execute()
+        
+        logger.info(f"Гравець {name} успішно доданий до Supabase")
+        return True
+        
     except Exception as e:
-        print(f"Помилка додавання гравця: {e}")
-    finally:
-        conn.close()
+        logger.error(f"Помилка додавання гравця {name}: {e}")
+        return False
 
 def update_score(name, score):
-    """Оновлює рахунок гравця"""
+    """Оновлює найкращий рахунок гравця"""
+    if supabase_client is None:
+        logger.error("Supabase не підключено")
+        return False
+        
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        # 1. Знаходимо гравця в базі даних
+        response = supabase_client.table("players").select("*").eq("name", name).execute()
         
-        # Спочатку перевіряємо існування гравця
-        cursor.execute("SELECT id, best_score FROM players WHERE name = ?", (name,))
-        player = cursor.fetchone()
-        
-        if player:
-            player_id, current_score = player
+        # 2. Якщо гравець існує
+        if response.data:
+            current_score = response.data[0]["best_score"]
+            
+            # 3. Перевіряємо чи новий рахунок кращий за поточний
             if score > current_score:
-                # Оновлюємо рахунок
-                cursor.execute("""
-                    UPDATE players 
-                    SET best_score = ?, updated_at = CURRENT_TIMESTAMP
-                    WHERE name = ?
-                """, (score, name))
-                conn.commit()
-                print(f"Рахунок для {name} оновлено: {score} (було: {current_score})")
+                result = supabase_client.table("players").update({
+                    "best_score": score,
+                    "updated_at": "now()"
+                }).eq("name", name).execute()
+                
+                logger.info(f"Рахунок оновлено: {name} -> {score}")
                 return True
             else:
-                print(f"Рахунок {name} не оновлено (текущий {current_score} > нового {score})")
+                logger.info(f"Рахунок не оновлено: у {name} вже є кращий результат {current_score}")
                 return False
-        else:
-            # Добавляем нового игрока
-            cursor.execute("INSERT INTO players (name, best_score) VALUES (?, ?)", (name, score))
-            conn.commit()
-            print(f"Новий гравець {name} додано з рахунком: {score}")
-            return True
                 
+        # 4. Якщо гравця не існує - створюємо нового
+        else:
+            result = supabase_client.table("players").insert({
+                "name": name,
+                "best_score": score
+            }).execute()
+            
+            logger.info(f"Створено нового гравця: {name} -> {score}")
+            return True
+            
     except Exception as e:
-        print(f"Помилка під час оновлення рахунку: {e}")
+        logger.error(f"Помилка оновлення рахунку: {e}")
         return False
-    finally:
-        conn.close()
 
 def get_leaderboard(limit=10):
-    """Повертає топ гравців"""
+    """Повертає топ гравців за рахунком"""
+    if supabase_client is None:
+        logger.error("Supabase не підключено")
+        return []
+        
     try:
-        conn = get_connection()
-        cursor = conn.cursor()
+        response = supabase_client.table("players").select(
+            "name, best_score"
+        ).order("best_score", desc=True).limit(limit).execute()
         
-        cursor.execute("""
-            SELECT name, best_score 
-            FROM players 
-            ORDER BY best_score DESC 
-            LIMIT ?
-        """, (limit,))
+        leaders = []
+        for player in response.data:
+            leaders.append((player["name"], player["best_score"]))
         
-        leaders = cursor.fetchall()
+        logger.info(f"Отримано {len(leaders)} гравців з таблиці лідерів")
         return leaders
         
     except Exception as e:
-        print(f"Помилка при отриманні лідерборду: {e}")
+        logger.error(f"Помилка отримання таблиці лідерів: {e}")
         return []
-    finally:
-        conn.close()
 
 def get_player_stats(name):
     """Повертає статистику гравця"""
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        cursor.execute("""
-            SELECT name, best_score, created_at, updated_at
-            FROM players 
-            WHERE name = ?
-        """, (name,))
-        
-        player = cursor.fetchone()
-        return player
-        
-    except Exception as e:
-        print(f"Помилка при отриманні статистики: {e}")
+    if supabase_client is None:
+        logger.error("Supabase не підключено")
         return None
-    finally:
-        conn.close()
+        
+    try:
+        response = supabase_client.table("players").select(
+            "name, best_score, created_at, updated_at"
+        ).eq("name", name).execute()
+        
+        if response.data:
+            player = response.data[0]
+            return (player["name"], player["best_score"], player["created_at"], player["updated_at"])
+        else:
+            return None
+            
+    except Exception as e:
+        logger.error(f"Помилка отримання статистики гравця: {e}")
+        return None
+
+def delete_player(name):
+    """Видаляє гравця з бази даних"""
+    if supabase_client is None:
+        logger.error("Supabase не підключено")
+        return False
+        
+    try:
+        result = supabase_client.table("players").delete().eq("name", name).execute()
+        
+        if len(result.data) > 0:
+            logger.info(f"Гравець {name} успішно видалений")
+            return True
+        else:
+            logger.warning(f"Гравець {name} не знайдений в базі даних")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Помилка видалення гравця: {e}")
+        return False

@@ -38,7 +38,7 @@ def register():
             return jsonify({"error": "Name is required"}), 400
         
         db.add_player(name)
-        print(f"✅ Гравець {name} зареєстрований")
+        print(f"Гравець {name} зареєстрований")
         return jsonify({"message": f"Player '{name}' registered successfully!"})
         
     except Exception as e:
@@ -48,7 +48,7 @@ def register():
 @app.route("/api/update_score", methods=["POST"])
 def update_score():
     try:
-        print("📞 Отримано запит на оновлення рахунку")
+        print("Отримано запит на оновлення рахунку")
         data = request.get_json()
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     # Ініціалізуємо базу
     db.init_db()
     
-    print(f"🚀 Запуск сервера на порту {port}")
+    print(f"Запуск сервера на порту {port}")
     app.run(
         host="0.0.0.0", 
         port=port, 
